@@ -4,15 +4,18 @@ from json import JSONEncoder
 import math
 from typing import Any, Callable, Optional, Union
 
-try:
-    from pydantic.v1.utils import GetterDict
-except ImportError:
-    from pydantic.utils import GetterDict
 from custom_components.givenergy_local.givenergy_modbus.exceptions import (
     ConversionError,
 )
 
 from custom_components.givenergy_local.givenergy_modbus.model import TimeSlot
+
+
+class GetterDict:
+    """Minimal getter base to avoid pydantic.v1 dependency."""
+
+    def __init__(self, obj: Any):
+        self._obj = obj
 
 
 class Converter:
@@ -199,32 +202,13 @@ class RegisterGetter(GetterDict):
     @classmethod
     def to_fields(cls) -> dict[str, tuple[Any, None]]:
         """Determine a pydantic fields definition for the class."""
+        return {k: (Any, None) for k in cls.REGISTER_LUT}
 
-        def infer_return_type(obj: Any):
-            if hasattr(obj, "__annotations__") and (
-                ret := obj.__annotations__.get("return", None)
-            ):
-                return ret
-            return obj  # assume it is a class/type already?
-
-        def return_type(v: RegisterDefinition):
-            if v.post_conv:
-                if isinstance(v.post_conv, tuple):
-                    return infer_return_type(v.post_conv[0])
-                else:
-                    return infer_return_type(v.post_conv)
-            elif v.pre_conv:
-                if isinstance(v.pre_conv, tuple):
-                    return infer_return_type(v.pre_conv[0])
-                else:
-                    return infer_return_type(v.pre_conv)
-            return Any
-
-        register_fields = {
-            k: (return_type(v), None) for k, v in cls.REGISTER_LUT.items()
-        }
-
-        return register_fields
+    @classmethod
+    def to_dict(cls, register_cache: Any) -> dict[str, Any]:
+        """Resolve all configured register values for a register cache."""
+        getter = cls(register_cache)
+        return {key: getter.get(key) for key in cls.REGISTER_LUT}
 
 
 class RegisterEncoder(JSONEncoder):
