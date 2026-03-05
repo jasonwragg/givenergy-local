@@ -1,9 +1,10 @@
 from enum import IntEnum
 
 try:
-    from pydantic.v1 import BaseConfig, create_model
+    from pydantic import ConfigDict, create_model
 except ImportError:
-    from pydantic import BaseConfig, create_model
+    from pydantic.v1 import BaseConfig, create_model
+    ConfigDict = None
 
 from custom_components.givenergy_local.givenergy_modbus.model.register import IR
 from custom_components.givenergy_local.givenergy_modbus.model.register import (
@@ -82,16 +83,22 @@ class BatteryRegisterGetter(RegisterGetter):
     }
 
 
-class BatteryConfig(BaseConfig):
-    """Pydantic configuration for the Battery class."""
+if ConfigDict is not None:
+    _Battery = create_model(
+        "Battery",
+        __config__=ConfigDict(frozen=True),
+        **BatteryRegisterGetter.to_fields(),
+    )
+else:
+    class BatteryConfig(BaseConfig):
+        """Pydantic configuration for the Battery class."""
 
-    orm_mode = True
-    getter_dict = BatteryRegisterGetter
+        orm_mode = True
+        getter_dict = BatteryRegisterGetter
 
-
-_Battery = create_model(
-    "Battery", __config__=BatteryConfig, **BatteryRegisterGetter.to_fields()
-)  # type: ignore[call-overload]
+    _Battery = create_model(
+        "Battery", __config__=BatteryConfig, **BatteryRegisterGetter.to_fields()
+    )  # type: ignore[call-overload]
 
 
 class Battery(_Battery):  # type: ignore[misc,valid-type]
@@ -105,3 +112,11 @@ class Battery(_Battery):  # type: ignore[misc,valid-type]
             "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
             "          ",
         )
+
+    @classmethod
+    def from_orm(cls, obj):
+        """Create a model instance from a register cache."""
+        values = BatteryRegisterGetter.to_dict(obj)
+        if hasattr(cls, "model_validate"):
+            return cls.model_validate(values)
+        return cls.parse_obj(values)

@@ -1,6 +1,8 @@
 import logging
 from typing import Any
 
+from pydantic import ConfigDict
+
 from custom_components.givenergy_local.givenergy_modbus.model import GivEnergyBaseModel
 from custom_components.givenergy_local.givenergy_modbus.model.battery import Battery
 from custom_components.givenergy_local.givenergy_modbus.model.inverter import Inverter
@@ -29,9 +31,7 @@ class Plant(GivEnergyBaseModel):
     data_adapter_serial_number: str = ""
     number_batteries: int = 0
 
-    class Config:  # noqa: D106
-        allow_mutation = True
-        frozen = False
+    model_config = ConfigDict(frozen=False, arbitrary_types_allowed=True)
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)

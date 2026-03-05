@@ -2,9 +2,10 @@ from enum import IntEnum, StrEnum
 import math
 
 try:
-    from pydantic.v1 import BaseConfig, create_model
+    from pydantic import ConfigDict, create_model
 except ImportError:
-    from pydantic import BaseConfig, create_model
+    from pydantic.v1 import BaseConfig, create_model
+    ConfigDict = None
 
 from custom_components.givenergy_local.givenergy_modbus.model.register import HR, IR
 from custom_components.givenergy_local.givenergy_modbus.model.register import (
@@ -325,13 +326,31 @@ class InverterRegisterGetter(RegisterGetter):
     #     return e_pv1_day + e_pv2_day
 
 
-class InverterConfig(BaseConfig):
-    """Pydantic configuration for the Inverter class."""
+if ConfigDict is not None:
+    _Inverter = create_model(
+        "Inverter",
+        __config__=ConfigDict(frozen=True),
+        **InverterRegisterGetter.to_fields(),
+    )
+else:
+    class InverterConfig(BaseConfig):
+        """Pydantic configuration for the Inverter class."""
 
-    orm_mode = True
-    getter_dict = InverterRegisterGetter
+        orm_mode = True
+        getter_dict = InverterRegisterGetter
+
+    _Inverter = create_model(
+        "Inverter", __config__=InverterConfig, **InverterRegisterGetter.to_fields()
+    )  # type: ignore[call-overload]
 
 
-Inverter = create_model(
-    "Inverter", __config__=InverterConfig, **InverterRegisterGetter.to_fields()
-)  # type: ignore[call-overload]
+class Inverter(_Inverter):  # type: ignore[misc,valid-type]
+    """Inverter model."""
+
+    @classmethod
+    def from_orm(cls, obj):
+        """Create a model instance from a register cache."""
+        values = InverterRegisterGetter.to_dict(obj)
+        if hasattr(cls, "model_validate"):
+            return cls.model_validate(values)
+        return cls.parse_obj(values)
